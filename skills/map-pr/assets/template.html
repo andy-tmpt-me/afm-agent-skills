@@ -1,0 +1,511 @@
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Filled in by map-pr/scripts/map_pr.py, which replaces the title, the treemap library and the data placeholders */
+/* One page, three views: open PRs, merged and closed PRs, and a briefing per PR */
+:root{
+  --bg:#f5f6f9; --surface:#ffffff; --fg:#1a1e27; --muted:#5b6474; --line:#dde1e8; --accent:#3451d1;
+  --k-app:#3a5be0; --k-test:#8a3fc6; --k-config:#a27500; --k-docs:#0a7f94; --k-generated:#8a93a3; --k-moved:#b9bfca;
+  --add:#2b8a3e; --del:#c92a2a; --good:#2b8a3e; --warn:#b45309; --heat:#c2410c;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11141a; --surface:#191d25; --fg:#e5e8ee; --muted:#97a0af; --line:#2b313c; --accent:#8ea2ff;
+  --k-app:#7d95ff; --k-test:#c58cf2; --k-config:#e2b443; --k-docs:#4cc4da; --k-generated:#7e8797; --k-moved:#4a5261;
+  --add:#5ad06e; --del:#ff7272; --good:#5ad06e; --warn:#f0b03f; --heat:#ff8a4c; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.45}
+a{color:inherit}
+.k-app{--k:var(--k-app)} .k-test{--k:var(--k-test)} .k-config{--k:var(--k-config)} .k-docs{--k:var(--k-docs)} .k-generated{--k:var(--k-generated)} .k-moved{--k:var(--k-moved)}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 56px;display:flex;flex-direction:column;gap:30px}
+.eyebrow{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.02em;overflow-wrap:anywhere}
+h1{font-size:24px;font-weight:600;margin:4px 0 0;text-wrap:balance;line-height:1.2}
+h2{font-size:17px;font-weight:600;margin:0}
+section{scroll-margin-top:64px}
+h3{font-size:12.5px;font-weight:600;margin:0;text-transform:uppercase;letter-spacing:.05em}
+.lede{color:var(--muted);max-width:78ch;margin:10px 0 0}
+.lede b{color:var(--fg);font-weight:600}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.a{color:var(--add)} .d{color:var(--del)}
+.hint{font-size:12.5px;color:var(--muted);margin:6px 0 0;max-width:86ch}
+.sw{display:inline-block;width:11px;height:11px;border-radius:2px;flex:none;background:var(--k)}
+.k-generated.sw{background:repeating-linear-gradient(135deg,var(--k) 0 2px,transparent 2px 4px);box-shadow:inset 0 0 0 1px var(--k)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px}
+
+/* PR picker */
+.top{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .in{max-width:1180px;margin:0 auto;padding:8px 16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.top .brand{font-weight:600}
+.top .repo{font-family:var(--mono);font-size:12px;color:var(--muted);margin-right:10px;text-decoration:none}
+.top .here{font-family:var(--mono);font-size:13px;margin-left:6px}
+.tab{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+.tab b{font-family:var(--mono);font-weight:500;color:var(--fg)}
+.tab[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.tab[aria-pressed="true"] b{color:var(--bg)}
+.tab:focus-visible,.seg button:focus-visible,.pt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.subnav{display:flex;gap:14px;font-size:12.5px;margin-left:auto;flex-wrap:wrap}
+.subnav button{font:inherit;border:0;background:none;padding:0;color:var(--muted);cursor:pointer}
+.subnav button:hover{color:var(--fg)}
+
+/* Context */
+.stack{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px}
+.stack .s{border:1px solid var(--line);border-radius:3px;padding:0 5px;background:var(--surface);cursor:default}
+.stack .s.me{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+/* Magnitude */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:12px}
+.tilestat{padding:10px 12px}
+.tilestat .v{font-size:26px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.tilestat .v small{font-size:13px;font-weight:400;color:var(--muted)}
+.tilestat .l{font-size:12.5px;color:var(--muted);margin-top:2px}
+.strip{display:flex;height:18px;gap:2px;margin-top:14px}
+.strip i{display:block;height:100%;background:var(--k);min-width:2px;border-radius:2px}
+.strip i.k-generated{background:repeating-linear-gradient(135deg,var(--k) 0 3px,color-mix(in srgb,var(--k) 45%,transparent) 3px 6px)}
+.strip i.close{box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--fg);z-index:1;position:relative}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;font-size:12.5px;color:var(--muted)}
+.keyrow span{display:inline-flex;gap:6px;align-items:center}
+.keyrow b{color:var(--fg);font-weight:500}
+.flows{margin:10px 0 0;padding:0;list-style:none;font-size:12.5px;color:var(--muted)}
+.flows code,.ev code,.hint code,footer code,.chipf{font-family:var(--mono);font-size:12px;color:var(--fg)}
+
+/* Ledger */
+.ledger{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:12px;align-items:start}
+.col{padding:12px 14px}
+.col h3{display:flex;align-items:center;gap:8px}
+.col h3 .ct{font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0}
+.chk{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;padding:9px 0;border-top:1px solid var(--line)}
+.col h3+.chk{margin-top:10px}
+.chk .ic{width:18px;height:18px;margin-top:1px}
+.chk.watch .ic{color:var(--warn)} .chk.held .ic{color:var(--good)}
+.chk .t{font-weight:600}
+.chk .ev{font-size:12.5px;color:var(--muted);margin-top:1px}
+.chk .fl{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.chipf{display:inline-flex;gap:6px;align-items:baseline;border:1px solid var(--line);border-radius:3px;padding:0 5px;text-decoration:none;background:var(--bg);max-width:100%;overflow-wrap:anywhere}
+.chipf:hover{border-color:var(--fg)}
+.chipf em{font-style:normal;color:var(--muted);font-family:var(--sans)}
+.empty{font-size:12.5px;color:var(--muted);padding:9px 0 0;margin:10px 0 0;border-top:1px solid var(--line)}
+
+/* Hot spots */
+.hot{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:12px;margin-top:12px;align-items:start}
+@media (max-width:820px){.hot{grid-template-columns:1fr}}
+.plot{padding:8px;position:relative}
+.plot>svg{display:block;width:100%;height:auto;overflow:visible}
+.plot text{font-family:var(--sans);font-size:11px;fill:var(--muted)}
+.plot .q{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.plot .lbl{fill:var(--fg);font-family:var(--mono);font-size:10.5px;paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round}
+.plot .grid{stroke:var(--line);stroke-width:1}
+.plot .thr{stroke:var(--heat);stroke-width:1;stroke-dasharray:4 3;opacity:.8}
+.plot .thrt{fill:var(--heat)}
+.pt{cursor:pointer;stroke:var(--surface);stroke-width:2;fill:color-mix(in srgb,var(--k-app) 70%,var(--surface))}
+.pt.new{fill:var(--surface);stroke:var(--k-app);stroke-width:2}
+.pt.sel{stroke:var(--fg);stroke-width:2.5}
+.tip{position:absolute;pointer-events:none;background:var(--fg);color:var(--bg);border-radius:4px;padding:6px 8px;font-size:12px;line-height:1.35;max-width:300px;z-index:5;display:none}
+.tip b{font-family:var(--mono);font-weight:500}
+.blast{padding:12px 14px}
+.blast .nm{font-family:var(--mono);font-size:13px;font-weight:500;overflow-wrap:anywhere}
+.blast dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;margin:8px 0 0;font-size:12.5px}
+.blast dt{color:var(--muted)} .blast dd{margin:0}
+.blast .deps{margin:10px 0 0;padding:0;list-style:none;font-size:12.5px}
+.blast .deps li{padding:4px 0;border-top:1px solid var(--line)}
+.blast .deps b{font-family:var(--mono);font-weight:500}
+.blast .deps span{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+/* Map */
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:10px 0}
+.ctl{display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{font:inherit;font-size:13px;border:0;background:none;color:var(--muted);padding:5px 11px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer}
+.toggle input{margin:0;accent-color:var(--k-test);cursor:pointer}
+#map{position:relative;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.grp{position:absolute;border:1px solid var(--line);border-radius:3px;pointer-events:none}
+.grp.l1{border-color:color-mix(in srgb,var(--fg) 30%,transparent)}
+.grp span{position:absolute;left:5px;top:2px;right:5px;font-family:var(--mono);font-size:11px;line-height:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grp.l1 span{color:var(--fg);font-weight:500;top:3px}
+.grp span em{font-style:normal;color:var(--muted);font-weight:400}
+.tile{position:absolute;border:1px solid color-mix(in srgb,var(--k) 50%,transparent);background-color:color-mix(in srgb,var(--k) 15%,var(--surface));border-radius:2px;overflow:hidden;color:var(--fg);text-decoration:none;padding:4px 5px 0;display:flex;flex-direction:column;gap:1px}
+.tile.k-generated{background-image:repeating-linear-gradient(135deg,transparent 0 6px,color-mix(in srgb,var(--k) 18%,transparent) 6px 12px)}
+.tile.heat{border-color:color-mix(in srgb,var(--heat) 40%,var(--line));background-image:none;background-color:color-mix(in oklab,var(--heat) var(--h),var(--surface))}
+.h0{--h:0%} .h1{--h:14%} .h2{--h:28%} .h3{--h:44%} .h4{--h:60%}
+.tile:hover,.tile:focus-visible{outline:2px solid var(--fg);outline-offset:-2px;z-index:2}
+.tile .nm{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .st{font-family:var(--mono);font-size:11px;white-space:nowrap;overflow:hidden}
+.info{font-family:var(--mono);font-size:12px;color:var(--muted);min-height:1.6em;margin-top:8px;overflow-wrap:anywhere}
+.info b{color:var(--fg);font-weight:500}
+.heatkey i.hk{display:inline-block;width:22px;height:12px;border:1px solid color-mix(in srgb,var(--heat) 40%,var(--line));background:color-mix(in oklab,var(--heat) var(--h),var(--surface))}
+.heatkey span{gap:5px}
+
+/* Review order */
+.layer{margin-top:16px}
+.layer>h3{display:flex;gap:8px;align-items:baseline;padding-bottom:6px}
+.layer>h3 .meta{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)}
+.unit{border-top:1px solid var(--line);padding:6px 0}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:baseline;text-decoration:none;color:inherit}
+.row:hover .p b{text-decoration:underline}
+.row .p{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere;min-width:0;display:flex;gap:7px;align-items:baseline}
+.row .p .sw{align-self:center}
+.row .p span{color:var(--muted)}
+.row .p b{font-weight:500}
+.row .n{text-align:right;font-size:12.5px;white-space:nowrap}
+.row.sub{padding:2px 0 0 18px}
+.row.sub .p{font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;padding:3px 0 0 18px}
+.chip{font-size:11.5px;border:1px solid var(--line);border-radius:3px;padding:0 5px;color:var(--muted);white-space:nowrap;display:inline-flex;gap:4px;align-items:center}
+.chip.w{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.chip.g{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,transparent)}
+.chip svg{width:11px;height:11px}
+.badge{font-style:normal;font-family:var(--sans);font-size:10.5px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;border:1px solid var(--line);border-radius:3px;padding:0 4px;color:var(--muted);white-space:nowrap}
+
+/* Compare */
+table.cmp{width:100%;border-collapse:collapse;margin-top:12px}
+.cmp th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+.cmp td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.cmp tr.pr{cursor:pointer}
+.cmp tr.pr:hover td{background:color-mix(in srgb,var(--accent) 5%,transparent)}
+.cmp .ttl{font-weight:600}
+.cmp .ttl span{font-family:var(--mono);font-weight:500;color:var(--muted)}
+.cmp .strip{height:12px;margin-top:6px}
+.cmp .sm{font-size:12.5px;color:var(--muted)}
+.cmp .wl{display:flex;flex-wrap:wrap;gap:4px}
+footer{font-size:12px;color:var(--muted)}
+footer li{margin:2px 0}
+</style>
+
+<div class="top"><div class="in" id="top"></div></div>
+<div class="wrap" id="view"></div>
+<div class="tip" id="tip"></div>
+
+<script>__TREEMAP_LIB__</script>
+<script>
+const DATA=__DATA__;
+const T=DATA.thresholds;
+const KINDS=Object.entries(DATA.kinds).map(([id,label])=>({id,label}));
+const byNum=Object.fromEntries([...DATA.prs,...DATA.archived].map(p=>[p.number,p]));
+const ICON={
+  watch:'<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M10 3 18 17H2Z"/><path d="M10 8.5v4M10 14.8v.2"/></svg>',
+  held:'<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="m6.5 10.2 2.4 2.4 4.6-5"/></svg>'};
+const state={view:'open',size:'raw',color:'kind',order:'layers',sort:'updated',tests:true,sel:null};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const md=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>');
+const fmt=n=>Math.round(n).toLocaleString('en-US');
+const plural=(n,w,ws)=>`${fmt(n)} ${n===1?w:(ws||w+'s')}`;
+const churn=f=>f.a+f.d;
+const moved=f=>Math.min(churn(f),f.moved_in+f.moved_out);
+const net=f=>churn(f)-moved(f);
+const sum=(xs,fn)=>xs.reduce((s,x)=>s+fn(x),0);
+const stat=(a,d)=>`<span class="num"><span class="a">+${fmt(a)}</span> <span class="d">−${fmt(d)}</span></span>`;
+const short=p=>{const x=p.split('/');return /^(main|__init__|index|utils|conftest)\./.test(x[x.length-1])?x.slice(-2).join('/'):x[x.length-1]};
+const low=s=>/^[A-Z]{2}/.test(s)?s:s[0].toLowerCase()+s.slice(1);
+const fileChip=(f,note)=>`<a class="chipf" href="${esc(f.url)}" target="_blank" rel="noopener" title="${esc(f.path)}">${esc(short(f.path))}${note?`<em>${esc(note)}</em>`:''}</a>`;
+const isHot=f=>f.kind==='app'&&f.touches>=T.touches;
+const isWide=f=>f.kind==='app'&&f.fanin_out>=T.fanin;
+const watch=p=>p.ledger.filter(c=>c.state==='watch'),held=p=>p.ledger.filter(c=>c.state==='held');
+const appOf=p=>p.files.filter(f=>f.kind==='app');
+const closedNote=p=>p.state==='OPEN'?(p.draft?'draft':'open'):`${p.state==='MERGED'?'merged':'closed'} ${p.closed}`;
+const sqrtScale=(max,r0,r1)=>v=>r0+Math.sqrt(Math.max(0,v)/max)*(r1-r0);
+
+/* ---- Shared pieces ---- */
+function strip(m,scale){
+  const segs=[['app','close',m.close],['test','',m.test],['config','',m.config],['docs','',m.docs],['moved','',m.moved],['generated','',m.generated]].filter(s=>s[2]>0);
+  const pad=scale?`<i style="flex:${Math.max(0,scale-m.total)};background:none;min-width:0"></i>`:'';
+  return `<div class="strip" aria-hidden="true">${segs.map(([k,cls,v])=>`<i class="k-${k} ${cls}" style="flex:${v}"></i>`).join('')}${pad}</div>`;
+}
+function keyRow(m){
+  const items=[['app','Application, read closely','close'],['test','Tests','test'],['config','Build & config','config'],['docs','Docs','docs'],['moved','Moved, not rewritten','moved'],['generated','Fixtures & generated','generated']];
+  return `<div class="keyrow">${items.filter(i=>!m||m[i[2]]>0).map(([k,l,key])=>`<span><i class="sw k-${k}"></i>${l}${m?` <b class="num">${fmt(m[key])}</b>`:''}</span>`).join('')}</div>`;
+}
+function seg(sel,key,fn){
+  const bs=document.querySelectorAll(sel+' button');
+  const paint=()=>bs.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===state[key])));
+  bs.forEach(b=>b.onclick=()=>{state[key]=b.dataset.v;paint();fn()});paint();
+}
+function topbar(){
+  const pr=byNum[state.view],el=$('#top');
+  let s=`<span class="brand">PR briefing</span><a class="repo" href="${esc(DATA.url)}" target="_blank" rel="noopener">${esc(DATA.repo)}</a>`;
+  if(DATA.only==null){
+    s+=`<button class="tab" data-v="open" aria-pressed="${state.view==='open'}">Open <b>${DATA.prs.length}</b></button>`;
+    if(DATA.archived.length)s+=`<button class="tab" data-v="closed" aria-pressed="${state.view==='closed'}">Merged &amp; closed <b>${DATA.archived.length}</b></button>`;
+  }
+  if(pr)s+=`<span class="here"><b>#${pr.number}</b></span><nav class="subnav">${[['magnitude','Magnitude'],['risk','Risk read'],['hot','Hot spots'],['map-s','Change map'],['order','Review order']].map(([id,l])=>`<button data-go="${id}">${l}</button>`).join('')}</nav>`;
+  el.innerHTML=s;
+  el.querySelectorAll('.tab').forEach(b=>b.onclick=()=>go(b.dataset.v));
+  el.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.go).scrollIntoView({behavior:'smooth'}));
+}
+function go(v){state.view=v;state.sel=null;history.replaceState(null,'',typeof v==='number'?`#pr-${v}`:'#'+v);render();window.scrollTo(0,0)}
+function footer(){
+  return `<footer><b>How these are worked out.</b> Every signal is counted from the diff, git history and imports. None is a model’s opinion.
+  <ul>
+    <li><b>Touch rate:</b> changes merged to <code>${esc(DATA.branch)}</code> that touched the file in the last ${T.window_days} days (${fmt(T.commits)} changes in that window). Hot spot = ${T.touches} or more, the top 10% of the ${fmt(T.files_touched)} source files that changed at all.</li>
+    <li><b>Dependents:</b> ${T.graphed?`files that import the file, directly or through a file that re-exports it, read from Python and Dart imports at the PR’s head commit. Tests are left out. Widely used = ${fmt(T.fanin)} or more outside the PR${T.fanin_top?', the top 10% of imported files':''}. Dynamic imports are missed.`:'not available here. Imports are read for Python and Dart only.'}</li>
+    <li><b>Moved lines:</b> runs of 3 or more removed lines that reappear as added lines anywhere in the PR, ignoring indentation.</li>
+    <li><b>Test pairing:</b> a test belongs to the changed source file it is named after (<code>test_x.py</code> and <code>x.py</code>, <code>x_test.dart</code> and <code>x.dart</code>), otherwise to the largest changed file it imports.</li>
+    <li><b>Sensitive areas and signatures:</b> path patterns, and single-line Python <code>def</code> and <code>class</code> lines in the patch.</li>
+  </ul>Synced ${DATA.mapped}. This page is a snapshot. Run map-pr again to refresh it.</footer>`;
+}
+
+/* ---- Lists of PRs ---- */
+function renderList(closed){
+  const SORT={updated:(a,b)=>0,read:(a,b)=>b.mag.close-a.mag.close,watch:(a,b)=>watch(b).length-watch(a).length};
+  const prs=[...(closed?DATA.archived:DATA.prs)].sort(SORT[closed?'updated':state.sort]);
+  const max=Math.max(1,...prs.map(p=>p.mag.total));
+  $('#view').innerHTML=`<header>
+    <div class="eyebrow">${esc(DATA.repo)} · synced ${DATA.mapped}</div>
+    <h1>${closed?'Merged and closed':'What is waiting for review'}</h1>
+    <p class="lede">${closed?`Pull requests that merged or closed in the last ${DATA.archive_days} days, with the briefing as it stood when each one closed.`
+      :`One row per open pull request: how much there is to read closely, and which review questions came back as something to watch. Pick a row for the full briefing.${DATA.capped?` Showing the ${DATA.capped} most recently updated.`:''}`}</p>
+  </header>
+  <section>
+  ${closed?'':`<div class="controls" style="margin-top:0"><span class="ctl">Order by <span class="seg" id="seg-sort"><button data-v="updated">Recently updated</button><button data-v="read">Most to read</button><button data-v="watch">Most to watch</button></span></span></div>`}
+  ${prs.length?`<table class="cmp"><thead><tr><th style="width:34%">Pull request</th><th style="width:22%">Magnitude</th><th>Watch</th><th style="width:16%">Assurances</th></tr></thead><tbody>
+  ${prs.map(p=>`<tr class="pr" data-pr="${p.number}" tabindex="0">
+    <td><div class="ttl"><span>#${p.number}</span> ${esc(p.title)}</div><div class="sm">${closed?closedNote(p)+' · ':p.draft?'draft · ':''}${plural(p.files.length,'file')} · ${p.mods.length?plural(p.mods.length,'module'):'no application code'}${p.stack_below.length?` · stacked on ${p.stack_below.length}`:''}${p.stack_above.length?` · ${plural(p.stack_above.length,'PR')} on top`:''}</div></td>
+    <td><b class="num">${fmt(p.mag.close)}</b> <span class="sm">lines to read closely of ${fmt(p.mag.total)}</span>${strip(p.mag,max)}</td>
+    <td><div class="wl">${watch(p).map(c=>`<span class="chip w">${ICON.watch.replace('class="ic"','')}${esc(c.t)}</span>`).join('')}</div></td>
+    <td><div class="wl">${held(p).map(c=>`<span class="chip g">${ICON.held.replace('class="ic"','')}${esc(c.t)}</span>`).join('')}</div></td></tr>`).join('')}
+  </tbody></table>${keyRow(null)}`:`<p class="hint">${closed?'Nothing has closed recently.':'No open pull requests.'}</p>`}
+  </section>${footer()}`;
+  if(!closed)seg('#seg-sort','sort',()=>renderList(false));
+  document.querySelectorAll('tr.pr').forEach(r=>{r.onclick=()=>go(+r.dataset.pr);r.onkeydown=e=>{if(e.key==='Enter')go(+r.dataset.pr)}});
+}
+
+/* ---- One PR ---- */
+function renderPR(pr){
+  const m=pr.mag,app=appOf(pr),byPath=Object.fromEntries(pr.files.map(f=>[f.path,f]));
+  const newApp=app.filter(f=>f.status==='added').length,pct=m.total?Math.round(m.close/m.total*100):0;
+  const W=watch(pr),H=held(pr);
+  const lede=[app.length?`<b>${fmt(m.close)}</b> lines of application code to read closely, in <b>${app.length}</b> file${app.length===1?'':'s'}${newApp?` (${newApp} new)`:''} across ${pr.mods.length===1?`<b>${esc(pr.mods[0])}</b>`:`<b>${pr.mods.length}</b> modules`}.`:'No application code changes.',
+    `${W.length?`<b>${W.length}</b> thing${W.length===1?'':'s'} to watch`:'Nothing to watch'} and <b>${H.length}</b> assurance${H.length===1?'':'s'}.`];
+  const chips=c=>c.files.length?`<div class="fl">${c.files.map(x=>fileChip(byPath[x.path],x.note)).join('')}${c.more?`<span class="chip">+${c.more} more</span>`:''}</div>`:'';
+  const chk=c=>`<div class="chk ${c.state}">${ICON[c.state]}<div><div class="t">${esc(c.t)}</div><div class="ev">${md(c.ev)}</div>${chips(c)}</div></div>`;
+  const stack=[...pr.stack_below,{n:pr.number,title:pr.title,me:1}];
+  $('#view').innerHTML=`
+  <header>
+    <div class="eyebrow"><a href="${esc(pr.url)}" target="_blank" rel="noopener">${esc(DATA.repo)} #${pr.number}</a> · ${closedNote(pr)} · opened ${pr.created} by ${esc(pr.author)}</div>
+    <h1>${esc(pr.title)}</h1>
+    <p class="lede">${lede.join(' ')}</p>
+    <div class="stack" aria-label="Where this PR sits"><span title="${esc(pr.root_base)}">${esc(pr.root_base.length>32?pr.root_base.slice(0,30)+'…':pr.root_base)}</span>${stack.map(s=>`<span>←</span><span class="s${s.me?' me':''}" title="${esc(s.title)}">#${s.n}</span>`).join('')}${pr.stack_above.length?`<span>←</span><span>${pr.stack_above.map(s=>`<span class="s" title="${esc(s.title)}">#${s.n}</span>`).join(' ')}</span>`:''}</div>
+    ${pr.state==='OPEN'?'':'<p class="hint">Archived. This is the briefing as it stood when the pull request closed.</p>'}
+  </header>
+
+  <section id="magnitude">
+    <h2>Magnitude</h2>
+    <p class="hint">GitHub counts every changed line the same. Here moved code, tests, docs and fixtures are set apart, so the number left is what needs a careful read.</p>
+    <div class="tiles">
+      <div class="card tilestat"><div class="v">${fmt(m.close)} <small>of ${fmt(m.total)}</small></div><div class="l">lines to read closely (${pct}%)</div></div>
+      <div class="card tilestat"><div class="v">${app.length}</div><div class="l">application file${app.length===1?'':'s'} changed${!newApp?'':newApp<app.length?`, ${newApp} of them new`:app.length===1?', and it is new':', all new'}</div></div>
+      <div class="card tilestat"><div class="v">${pr.mods.length}</div><div class="l">module${pr.mods.length===1?'':'s'} with application changes</div></div>
+      <div class="card tilestat"><div class="v">${m.close?(m.test/m.close).toFixed(1):'–'}</div><div class="l">test lines per application line</div></div>
+      <div class="card tilestat"><div class="v">${fmt(m.moved)}</div><div class="l">lines moved, not rewritten</div></div>
+    </div>
+    ${strip(m)}${keyRow(m)}
+    ${pr.flows.length?`<ul class="flows">${pr.flows.map(f=>`<li>About <b class="num">${f.lines}</b> lines moved ${f.from===f.to?`within <code>${esc(short(f.from))}</code>`:`from <code>${esc(short(f.from))}</code> to <code>${esc(short(f.to))}</code>`}. Compare the two, don’t re-read them.</li>`).join('')}</ul>`:''}
+  </section>
+
+  <section id="risk">
+    <h2>Risk read</h2>
+    <p class="hint">The same questions are asked of every PR. Each one comes back as an assurance, with the evidence, or as something to watch, with the files.</p>
+    <div class="ledger">
+      <div class="card col"><h3>${ICON.watch.replace('class="ic"','class="ic" style="width:16px;height:16px;color:var(--warn)"')}Watch <span class="ct">${W.length}</span></h3>${W.map(chk).join('')||'<p class="empty">Nothing flagged.</p>'}</div>
+      <div class="card col"><h3>${ICON.held.replace('class="ic"','class="ic" style="width:16px;height:16px;color:var(--good)"')}Assurances <span class="ct">${H.length}</span></h3>${H.map(chk).join('')||'<p class="empty">None established.</p>'}</div>
+    </div>
+  </section>
+
+  <section id="hot">
+    <h2>Hot spots</h2>
+    <p class="hint">Each circle is a changed application file. Further right, more of the repo imports it. Higher up, it has changed more often on <code>${esc(DATA.branch)}</code> in the last ${T.window_days} days. Circle size is lines changed in this PR. Click a circle to see what depends on it.${T.graphed?'':' Imports are read for Python and Dart only, so every file here shows no dependents.'}</p>
+    <div class="hot"><div class="card plot" id="plot"></div><div class="card blast" id="blast"></div></div>
+  </section>
+
+  <section id="map-s">
+    <h2>Change map</h2>
+    <div class="controls">
+      <span class="ctl">Size by <span class="seg" id="seg-size"><button data-v="raw">All changed lines</button><button data-v="net">Without moved lines</button></span></span>
+      <span class="ctl">Colour by <span class="seg" id="seg-color"><button data-v="kind">Kind</button><button data-v="touch">Touch rate</button><button data-v="dep">Dependents</button></span></span>
+      <label class="toggle"><input type="checkbox" id="show-tests"${state.tests?' checked':''}>Show tests and fixtures</label>
+    </div>
+    <div id="map" role="list" aria-label="Changed files sized by lines changed"></div>
+    <div class="keyrow heatkey" id="mapkey"></div>
+    <div class="info" id="info"></div>
+  </section>
+
+  <section id="order">
+    <h2>Review order</h2>
+    <p class="hint">Each test sits under the file it tests. Files are grouped into layers, so a file comes after the changed files it imports.</p>
+    <div class="controls" style="margin-bottom:0">
+      <span class="ctl">Order by <span class="seg" id="seg-order"><button data-v="layers">Foundations first</button><button data-v="size">Largest first</button><button data-v="risk">Riskiest first</button></span></span>
+    </div>
+    <div id="units"></div>
+  </section>
+  ${footer()}`;
+  seg('#seg-size','size',()=>renderMap(pr));seg('#seg-color','color',()=>renderMap(pr));seg('#seg-order','order',()=>renderOrder(pr));
+  $('#show-tests').onchange=e=>{state.tests=e.target.checked;renderMap(pr)};
+  const top=[...app].sort((x,y)=>y.risk-x.risk)[0];
+  state.sel=state.sel||(top&&top.path);
+  renderPlot(pr);renderBlast(pr);renderMap(pr);renderOrder(pr);
+}
+
+/* ---- Hot-spot plot ---- */
+function renderPlot(pr){
+  const pts=appOf(pr),el=$('#plot'),byPath=Object.fromEntries(pts.map(f=>[f.path,f]));
+  if(!pts.length){el.innerHTML='<p class="hint" style="padding:8px;margin:0">No application files in this PR.</p>';return}
+  const W=680,H=420,M={l:46,r:16,t:26,b:40};
+  const xmax=Math.max(T.fanin*2,...pts.map(f=>f.fanin_out))*1.08,ymax=Math.max(T.touches*2,...pts.map(f=>f.touches))*1.08;
+  const x=sqrtScale(xmax,M.l+26,W-M.r),y=sqrtScale(ymax,H-M.b-26,M.t);
+  const r=f=>Math.max(5,Math.min(24,Math.sqrt(churn(f))*1.5));
+  const ticks=(max,px)=>{let lastPx=-99;return [0,1,3,6,12,25,50,100,200,400,800,1600,3200,6400,12800].filter(v=>v<=max).filter(v=>{const p=px(v);if(Math.abs(p-lastPx)<26)return false;lastPx=p;return true})};
+  // Files sharing a spot fan out so none hides another
+  const seen={},pos=new Map(),bySize=[...pts].sort((a,b)=>churn(b)-churn(a));
+  bySize.forEach(f=>{const k=f.fanin_out+'|'+f.touches,i=seen[k]=(seen[k]||0)+1;pos.set(f.path,[x(f.fanin_out)+(i-1)*9,y(f.touches)-(i-1)*9])});
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Changed application files by dependents and touch rate">`;
+  s+=`<rect x="${x(T.fanin)}" y="${M.t}" width="${W-M.r-x(T.fanin)}" height="${y(T.touches)-M.t}" fill="var(--heat)" opacity=".07"/>`;
+  ticks(xmax,x).forEach(v=>{s+=`<line class="grid" x1="${x(v)}" x2="${x(v)}" y1="${M.t}" y2="${H-M.b}"/><text x="${x(v)}" y="${H-M.b+15}" text-anchor="middle">${fmt(v)}</text>`});
+  ticks(ymax,y).forEach(v=>{s+=`<line class="grid" x1="${M.l}" x2="${W-M.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${M.l-7}" y="${y(v)+4}" text-anchor="end">${fmt(v)}</text>`});
+  s+=`<line class="thr" x1="${x(T.fanin)}" x2="${x(T.fanin)}" y1="${M.t}" y2="${H-M.b}"/><line class="thr" x1="${M.l}" x2="${W-M.r}" y1="${y(T.touches)}" y2="${y(T.touches)}"/>`;
+  const qy=y(T.touches);
+  s+=`<text class="q thrt" x="${W-M.r}" y="${M.t-8}" text-anchor="end">Hot spot</text><text class="q" x="${M.l}" y="${M.t-8}">Churning</text><text class="q" x="${W-M.r-6}" y="${qy+16}" text-anchor="end">Load-bearing</text><text class="q" x="${M.l+6}" y="${qy+16}">Quiet</text>`;
+  s+=`<text x="${(M.l+W-M.r)/2}" y="${H-6}" text-anchor="middle">Dependents outside this PR (files that import it)</text><text transform="translate(12 ${(M.t+H-M.b)/2}) rotate(-90)" text-anchor="middle">Changes on ${esc(DATA.branch)}, last ${T.window_days} days</text>`;
+  bySize.forEach(f=>{const[cx,cy]=pos.get(f.path);
+    s+=`<circle class="pt${f.on_main?'':' new'}${f.path===state.sel?' sel':''}" data-p="${esc(f.path)}" cx="${cx}" cy="${cy}" r="${r(f)}" tabindex="0" role="button" aria-label="${esc(f.path)}: ${f.fanin_out} dependents, ${f.touches} changes"/>`});
+  // Direct labels only for files past a threshold, plus the selected one
+  const placed=[];
+  pts.filter(f=>isHot(f)||isWide(f)||f.path===state.sel).sort((a,b)=>b.risk-a.risk).slice(0,12).sort((a,b)=>pos.get(a.path)[1]-pos.get(b.path)[1]).forEach(f=>{
+    const[cx,cy]=pos.get(f.path),name=short(f.path),w=name.length*6.4,right=cx+r(f)+5+w<W-M.r;
+    let ly=cy+4;const lx=right?cx+r(f)+5:cx-r(f)-5;
+    for(const p of placed)if(Math.abs(p.y-ly)<12&&Math.abs(p.x-lx)<Math.max(w,p.w))ly=p.y+12;
+    placed.push({x:lx,y:ly,w});
+    s+=`<text class="lbl" x="${lx}" y="${ly}" text-anchor="${right?'start':'end'}">${esc(name)}</text>`});
+  s+='</svg>';
+  const fresh=pts.filter(f=>!f.on_main).length;
+  s+=`<div class="keyrow" style="margin:2px 6px 4px"><span><svg width="14" height="14"><circle cx="7" cy="7" r="5" class="pt"/></svg>on ${esc(DATA.branch)}</span><span><svg width="14" height="14"><circle cx="7" cy="7" r="5" class="pt new"/></svg>not on ${esc(DATA.branch)} yet, so no history${fresh?` (${fresh})`:''}</span><span><svg width="18" height="6"><line class="thr" x1="0" x2="18" y1="3" y2="3"/></svg>widely used from ${fmt(T.fanin)} dependents, hot spot from ${T.touches} changes</span></div>`;
+  el.innerHTML=s;
+  const tip=$('#tip');
+  el.querySelectorAll('.pt[data-p]').forEach(c=>{
+    const f=byPath[c.dataset.p];
+    const show=()=>{tip.innerHTML=`<b>${esc(f.path)}</b><br>+${f.a} −${f.d} in this PR<br>${plural(f.fanin_out,'dependent')} outside this PR${f.fanin!==f.fanin_out?`, ${f.fanin-f.fanin_out} inside`:''}<br>${f.on_main?`${plural(f.touches,'change')} on ${esc(DATA.branch)} in ${T.window_days} days`:`Not on ${esc(DATA.branch)} yet`}`;
+      tip.style.display='block';const b=c.getBoundingClientRect();
+      tip.style.left=Math.min(window.innerWidth-310,b.right+8+window.scrollX)+'px';tip.style.top=(b.top+window.scrollY-6)+'px'};
+    c.onmouseenter=show;c.onfocus=show;c.onmouseleave=c.onblur=()=>tip.style.display='none';
+    const pick=()=>{state.sel=f.path;tip.style.display='none';renderPlot(pr);renderBlast(pr)};
+    c.onclick=pick;c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick()}};
+  });
+}
+function renderBlast(pr){
+  const f=pr.files.find(x=>x.path===state.sel),el=$('#blast');
+  if(!f){el.innerHTML='<p class="hint" style="margin:0">Nothing to show.</p>';return}
+  const groups={};f.dependents.forEach(p=>{const m=p.split('/').slice(0,2).join('/');(groups[m]=groups[m]||[]).push(short(p))});
+  const more=f.fanin_out-f.dependents.length;
+  el.innerHTML=`<h3>Blast radius</h3>
+    <div class="nm" style="margin-top:8px"><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.path)}</a></div>
+    <dl>
+      <dt>This PR</dt><dd>${stat(f.a,f.d)}${moved(f)?`, ${moved(f)} moved`:''}</dd>
+      <dt>Dependents</dt><dd><b>${fmt(f.fanin_out)}</b> outside this PR${f.fanin!==f.fanin_out?`, ${f.fanin-f.fanin_out} inside it`:''}${f.fanin_tests?`, plus ${plural(f.fanin_tests,'test')}`:''}</dd>
+      <dt>Reach</dt><dd>${f.reach?`${fmt(f.reach)} files import it directly or through another file`:'nothing imports it'}</dd>
+      <dt>History</dt><dd>${f.on_main?(f.touches?`${plural(f.touches,'change')} on ${esc(DATA.branch)} in ${T.window_days} days, last on ${f.last}`:`no changes on ${esc(DATA.branch)} in ${T.window_days} days`):`not on ${esc(DATA.branch)} yet`}</dd>
+      ${f.other_prs.length?`<dt>In flight</dt><dd>also changed by ${f.other_prs.map(o=>'#'+o.n).join(', ')}</dd>`:''}
+      ${f.flags.length?`<dt>Area</dt><dd>${f.flags.map(k=>low(DATA.areas[k])).join(', ')}</dd>`:''}
+    </dl>
+    ${f.dependents.length?`<p class="hint" style="margin-top:12px">Not in this diff, but they import it:</p><ul class="deps">${Object.entries(groups).map(([m,xs])=>`<li><b>${esc(m)}</b> <span>${xs.map(esc).join(', ')}</span></li>`).join('')}${more>0?`<li><span>and ${fmt(more)} more</span></li>`:''}</ul>`
+      :`<p class="hint" style="margin-top:12px">${f.fanin?'Only files in this PR import it, so the whole effect is in this diff.':'No file imports it. It may be an entry point, such as a handler or a script.'}</p>`}`;
+}
+
+/* ---- Change map ---- */
+const BINS={touch:v=>v===0?0:v<T.touches/2?1:v<T.touches?2:v<T.touches*2.5?3:4,dep:v=>v===0?0:v<T.fanin/2?1:v<T.fanin?2:v<T.fanin*2.5?3:4};
+const binLabels=t=>{const a=Math.ceil(t/2),b=Math.ceil(t*2.5);return ['0',a>1?`1–${fmt(a-1)}`:'',`${fmt(a)}–${fmt(t-1)}`,`${fmt(t)}–${fmt(b-1)}`,`${fmt(b)}+`]};
+let lastW=0;
+function renderMap(pr){
+  const el=$('#map'),sizeOf=f=>state.size==='net'?net(f):churn(f);
+  const files=pr.files.filter(f=>state.tests||(f.kind!=='test'&&f.kind!=='generated'));
+  el.replaceChildren();
+  const W=el.clientWidth;lastW=W;
+  const H=Math.round(Math.max(360,Math.min(600,W*.52)));el.style.height=H+'px';
+  const root={name:'',children:[]};
+  const get=(p,name)=>{let c=p.children.find(x=>x.name===name);if(!c){c={name,children:[]};p.children.push(c)}return c};
+  for(const f of files){const n=get(get(root,f.mod),f.dir||'(top level)');n.children.push({name:f.name,file:f,value:Math.max(state.size==='net'?.01:1,sizeOf(f))})}
+  // A group with a single subgroup takes its children directly, so the map doesn't nest a lone box
+  for(const g of root.children){if(g.children.length!==1)continue;const only=g.children[0];if(only.name!=='(top level)')g.name+='/'+only.name;g.children=only.children}
+  const h=d3.hierarchy(root).sum(d=>d.children?0:d.value).sort((a,b)=>b.value-a.value);
+  d3.treemap().size([W,H]).tile(d3.treemapSquarify.ratio(1.3)).paddingOuter(3).paddingTop(d=>d.depth===0?3:d.depth===1?21:17).paddingInner(2).round(true)(h);
+  const place=(e,n)=>Object.assign(e.style,{left:n.x0+'px',top:n.y0+'px',width:(n.x1-n.x0)+'px',height:(n.y1-n.y0)+'px'});
+  const val=f=>state.color==='touch'?f.touches:f.fanin_out;
+  if(!files.length)el.innerHTML='<p class="hint" style="padding:16px;margin:0">Only tests and fixtures changed. Tick the box above to show them.</p>';
+  for(const n of files.length?h.descendants():[]){
+    if(!n.depth)continue;const w=n.x1-n.x0,hh=n.y1-n.y0;if(w<1||hh<1)continue;
+    if(n.children){const g=document.createElement('div');g.className='grp l'+n.depth;place(g,n);if(w>36&&hh>18)g.innerHTML=`<span>${esc(n.data.name)} <em>${fmt(n.value)}</em></span>`;el.append(g);continue}
+    const f=n.data.file,t=document.createElement('a');
+    t.className='tile k-'+f.kind+(state.color==='kind'?'':' heat h'+BINS[state.color](val(f)));
+    t.setAttribute('role','listitem');place(t,n);t.href=f.url;t.target='_blank';t.rel='noopener';
+    t.setAttribute('aria-label',`${f.path}, ${DATA.kinds[f.kind]}, ${f.a} added, ${f.d} removed, ${f.touches} changes on ${DATA.branch}, ${f.fanin_out} dependents`);
+    let inner='';
+    if(w>44&&hh>20)inner+=`<span class="nm">${esc(f.name)}</span>`;
+    if(w>58&&hh>38)inner+=`<span class="st">${state.color==='kind'?(state.size==='net'&&moved(f)?`${fmt(net(f))} after moves`:`+${fmt(f.a)} −${fmt(f.d)}`):state.color==='touch'?(f.on_main?plural(f.touches,'change'):'new'):plural(f.fanin_out,'dependent')}</span>`;
+    t.innerHTML=inner;
+    const show=()=>showInfo(f);t.addEventListener('mouseenter',show);t.addEventListener('focus',show);
+    el.append(t);
+  }
+  const key=$('#mapkey');
+  if(state.color==='kind')key.innerHTML=KINDS.filter(k=>files.some(f=>f.kind===k.id)).map(k=>`<span><i class="sw k-${k.id}"></i>${k.label}</span>`).join('')+`<span>Tile area = ${state.size==='net'?'lines changed, moved lines left out':'lines changed'}</span>`;
+  else{const thr=state.color==='touch'?T.touches:T.fanin,lb=binLabels(thr);
+    key.innerHTML=`<span>${state.color==='touch'?`Changes on ${esc(DATA.branch)} in ${T.window_days} days`:'Files outside this PR that import it'}:</span>`+lb.map((l,i)=>l?`<span><i class="hk h${i}"></i>${l}</span>`:'').join('')+`<span>${fmt(thr)}+ is ${state.color==='touch'?'a hot spot':'widely used'}</span>`}
+  showInfo(null);
+}
+function showInfo(f){
+  $('#info').innerHTML=f?`<b>${esc(f.path)}</b> · ${stat(f.a,f.d)}${moved(f)?` · ${moved(f)} moved`:''} · ${f.on_main?`${plural(f.touches,'change')} on ${esc(DATA.branch)}`:`not on ${esc(DATA.branch)} yet`} · ${plural(f.fanin_out,'dependent')} outside this PR${f.other_prs.length?` · also in ${f.other_prs.map(o=>'#'+o.n).join(', ')}`:''}`
+    :'Hover a tile for its numbers. Click a tile to open that file in the PR.';
+}
+
+/* ---- Review order ---- */
+function fileChips(f){
+  const c=[];
+  if(isHot(f))c.push(['w',`hot spot: ${f.touches} changes in ${T.window_days} days`]);
+  if(isWide(f))c.push(['w',`${fmt(f.fanin_out)} dependents outside this PR`]);
+  else if(f.fanin_out)c.push(['',plural(f.fanin_out,'dependent')+' outside this PR']);
+  f.flags.forEach(k=>c.push(['w',low(DATA.areas[k])]));
+  f.sig.changed.forEach(n=>c.push([f.fanin_out?'w':'',`signature changed: ${n}`]));
+  f.sig.removed.forEach(n=>c.push([f.fanin_out?'w':'',`removed: ${n}`]));
+  f.sig.moved.forEach(n=>c.push(['',`moved out: ${n}`]));
+  if(moved(f))c.push(['',`${moved(f)} of ${churn(f)} lines moved`]);
+  if(f.other_prs.length)c.push(['',`also in ${f.other_prs.slice(0,6).map(o=>'#'+o.n).join(', ')}${f.other_prs.length>6?'…':''}`]);
+  if(f.kind==='app'&&f.code){
+    if(f.tested_by.length)c.push(['g',`${plural(f.tested_by.length,'changed test')} cover${f.tested_by.length===1?'s':''} it`]);
+    else if(net(f)>=5)c.push(['w',f.existing_tests?`no changed test (${plural(f.existing_tests,'existing test')} unchanged)`:'no changed test']);
+  }
+  return c.length?`<div class="chips">${c.map(([k,t])=>`<span class="chip ${k}">${esc(t)}</span>`).join('')}</div>`:'';
+}
+const fileRow=(f,sub)=>{const dir=f.path.slice(0,f.path.length-f.name.length);
+  return `<a class="row${sub?' sub':''}" href="${esc(f.url)}" target="_blank" rel="noopener"><span class="p"><i class="sw k-${f.kind}"></i><span>${sub?'':esc(dir)}<b>${esc(f.name)}</b></span>${f.status==='added'?'<em class="badge">new</em>':f.status==='removed'?'<em class="badge">deleted</em>':f.status==='renamed'?'<em class="badge">renamed</em>':''}</span><span class="n">${stat(f.a,f.d)}</span></a>`};
+function renderOrder(pr){
+  const app=appOf(pr),byPath=Object.fromEntries(pr.files.map(f=>[f.path,f]));let s='';
+  const unit=f=>`<div class="unit">${fileRow(f)}${fileChips(f)}${(f.tests||[]).map(p=>fileRow(byPath[p],true)).join('')}</div>`;
+  const section=(title,meta,fs)=>fs.length?`<div class="layer"><h3>${title} <span class="meta">${meta}</span></h3>${fs.map(unit).join('')}</div>`:'';
+  const lines=fs=>`${plural(fs.length,'file')} · ${stat(sum(fs,f=>f.a),sum(fs,f=>f.d))}`;
+  const bySize=(x,y)=>churn(y)-churn(x);
+  if(state.order==='layers'){
+    const max=Math.max(0,...app.map(f=>f.layer));
+    for(let i=0;i<=max;i++){const fs=app.filter(f=>f.layer===i).sort(bySize);
+      s+=section(`Layer ${i+1}`,`${lines(fs)} · ${i===0?(max?'foundations: these import nothing else changed in this PR':'no file here imports another changed file'):`builds on layer ${i}`}`,fs)}
+  }else{
+    const fs=[...app].sort(state.order==='risk'?(x,y)=>y.risk-x.risk:bySize);
+    s+=section('Application',`${lines(fs)} · ${state.order==='risk'?'hot spots, widely used files and sensitive areas first':'largest change first'}`,fs);
+  }
+  const kind=k=>pr.files.filter(f=>f.kind===k).sort(bySize);
+  const orphan=kind('test').filter(f=>!f.covers);
+  s+=section('Tests with no changed source file',`${lines(orphan)} · the code they test isn’t in this PR`,orphan);
+  for(const k of ['config','docs','generated'])s+=section(DATA.kinds[k],lines(kind(k)),kind(k));
+  $('#units').innerHTML=s;
+}
+
+function render(){topbar();const pr=byNum[state.view];pr?renderPR(pr):renderList(state.view==='closed')}
+const fromHash=()=>{if(DATA.only!=null)return DATA.only;const m=location.hash.match(/^#pr-(\d+)$/);return m&&byNum[+m[1]]?+m[1]:location.hash==='#closed'&&DATA.archived.length?'closed':'open'};
+state.view=fromHash();
+addEventListener('hashchange',()=>{if(/^#(pr-\d+|open|closed)$/.test(location.hash)&&fromHash()!==state.view){state.view=fromHash();state.sel=null;render()}});
+new ResizeObserver(()=>{const el=$('#map'),pr=byNum[state.view];if(el&&pr&&Math.abs(el.clientWidth-lastW)>4)requestAnimationFrame(()=>renderMap(pr))}).observe(document.body);
+render();
+</script>
